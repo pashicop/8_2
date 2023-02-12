@@ -2,4 +2,15 @@
 clickhouse:
   hosts:
     clickhouse-01:
-      ansible_connection: docker
+      ansible_host: 192.168.0.15
+      ansible_user: vagrant
+      ansible_ssh_private_key_file: '/home/pashi/PycharmProjects/8_2/.vagrant/machines/clickhouse/virtualbox/private_key'
+#      StrictHostKeyChecking: no
+#      UserKnownHostsFile: /dev/null
+#      ansible_port: 2222
+vector:
+  hosts:
+    vector-01:
+      ansible_host: 192.168.0.15
+      ansible_user: vagrant
+      ansible_ssh_private_key_file: '/home/pashi/PycharmProjects/8_2/.vagrant/machines/vector/virtualbox/private_key'

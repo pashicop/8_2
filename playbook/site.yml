@@ -1,12 +1,12 @@
 ---
 - name: Install Clickhouse
   hosts: clickhouse
-  handlers:
-    - name: Start clickhouse service
-      become: true
-      ansible.builtin.service:
-        name: clickhouse-server
-        state: restarted
+#  handlers:
+#    - name: Start clickhouse service
+#      become: true
+#      ansible.builtin.service:
+#        name: clickhouse-server
+#        state: restarted
   tasks:
     - block:
         - name: Get clickhouse distrib
@@ -20,17 +20,60 @@
             url: "https://packages.clickhouse.com/rpm/stable/clickhouse-common-static-{{ clickhouse_version }}.x86_64.rpm"
             dest: "./clickhouse-common-static-{{ clickhouse_version }}.rpm"
     - name: Install clickhouse packages
-      become: false
+      become: true
       ansible.builtin.yum:
         name:
           - clickhouse-common-static-{{ clickhouse_version }}.rpm
           - clickhouse-client-{{ clickhouse_version }}.rpm
           - clickhouse-server-{{ clickhouse_version }}.rpm
-      notify: Start clickhouse service
+#      notify:
+#        - Start clickhouse service
+    - name: Start clickhouse service task
+      become: true
+      ansible.builtin.service:
+        name: clickhouse-server
+        state: started
 #    - name: Flush handlers
 #      meta: flush_handlers
+    - name: Wait for service start
+      ansible.builtin.pause:
+        seconds: 5
     - name: Create database
       ansible.builtin.command: "clickhouse-client -q 'create database logs;'"
       register: create_db
-      failed_when: create_db.rc != 0 and create_db.rc !=82
+      failed_when: create_db.rc != 0 and create_db.rc !=82 and create_db.rc !=210
       changed_when: create_db.rc == 0
+- name: Install Vector
+  hosts: vector
+  tasks:
+    - name: Download Vector
+      ansible.builtin.get_url:
+        url: "https://packages.timber.io/vector/0.27.0/vector-0.27.0-x86_64-unknown-linux-musl.tar.gz"
+        dest: "./vector-0.27.0-x86_64-unknown-linux-musl.tar.gz"
+    - name: mkdir vector
+      ansible.builtin.file:
+        path: "/home/vagrant/vector"
+        state: directory
+        mode: "0755"
+    - name: unarchive
+      ansible.builtin.unarchive:
+        src: "/home/vagrant/vector-0.27.0-x86_64-unknown-linux-musl.tar.gz"
+        dest: "/home/vagrant/vector"
+        remote_src: yes
+        extra_opts:
+          - --strip-components=2
+    - name: Test if PATH changed .bashrc
+      shell: 'grep -c "# Ansible PATH edit" "{{ ansible_env.HOME }}/.bashrc" || true'
+      register: test
+      changed_when: false
+    - debug: var=test
+    - name: add PATH to .bashrc
+      ansible.builtin.blockinfile:
+        path: "{{ ansible_env.HOME }}/.bashrc"
+        marker: "# Ansible PATH edit"
+        block: 'export PATH=$PATH:$(pwd)/vector/bin'
+      when: test.stdout == "0"
+    - name: start vector
+      ansible.builtin.shell:
+        cmd: "(vector --config {{ ansible_env.HOME }}/vector/config/vector.toml > {{ ansible_env.HOME }}/log.txt &)"
+        creates: "{{ ansible_env.HOME }}/log.txt"
